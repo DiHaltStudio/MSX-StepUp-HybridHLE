@@ -543,8 +543,8 @@ func _render_sprites() -> void:
 		sp.position = Vector2(x_pos * 4, screen_y * 4)
 		sp.visible  = true
 
-const CREDITS_TEXT := "DiHalt"
-const CREDITS_ADDR := 0x1a69-5
+const CREDITS_TEXT := "Hybrid HLE version DiHalt 2026"
+const CREDITS_ADDR := 0x1a69-5-3
 
 func _inject_credits() -> void:
 	if vram[0x1a34] != 0x62 or vram[0x1a35] != 0x79:
