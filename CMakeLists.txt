@@ -84,4 +84,10 @@ set_target_properties(z80_plugin PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${Z80_OUTPUT_DIR}"
 )
 
+# MinGW follows Unix naming conventions and otherwise emits
+# libz80_plugin.dll. Godot's Windows entry expects z80_plugin.dll.
+if(WIN32)
+    set_target_properties(z80_plugin PROPERTIES PREFIX "")
+endif()
+
 message(STATUS "z80_plugin output directory: ${Z80_OUTPUT_DIR}")

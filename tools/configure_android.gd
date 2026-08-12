@@ -16,5 +16,4 @@ func _initialize() -> void:
 		return
 	settings.set_setting("export/android/android_sdk_path", android_sdk)
 	settings.set_setting("export/android/java_sdk_path", java_home)
-	settings.save()
 	quit()
