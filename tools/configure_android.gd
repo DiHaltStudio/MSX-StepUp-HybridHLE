@@ -3,7 +3,7 @@ extends SceneTree
 
 
 func _initialize() -> void:
-	var settings := EditorSettings.get_singleton()
+	var settings := EditorInterface.get_editor_settings()
 	if settings == null:
 		push_error("Editor settings are unavailable")
 		quit(1)
