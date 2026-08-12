@@ -1,0 +1,48 @@
+# Godot-generated files
+.godot/
+/android/
+
+# Native build and export artifacts
+/build/
+/bin/
+/dist/
+/export/
+*.so
+*.dll
+*.dylib
+*.pdb
+
+# CMake-generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# User-provided cartridge ROMs. C-BIOS is intentionally distributed under
+# its own 2-clause BSD license.
+*.rom
+!roms/cbios_main_msx1_eu.rom
+
+# Local development environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.log
+*.omr
+.embeddings.cache.json
+
+# Personal editor, agent and MCP configuration
+.agents/
+.claude/
+.vscode/
+.mcp.json
+*.local
+
+# OS/editor temporary files and local captures
+.DS_Store
+Thumbs.db
+*~
+mcp_*.png
+mcp_*.png.import

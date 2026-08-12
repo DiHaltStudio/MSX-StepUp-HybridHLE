@@ -1,0 +1,179 @@
+name: Build distributable packages
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: 4.6.3
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: true
+      - name: Build native extension
+        run: |
+          cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DGODOTCPP_TARGET=template_release
+          cmake --build build/linux --parallel
+      - name: Export and package
+        run: |
+          godot --headless --import --path .
+          mkdir -p build/export build/package/roms
+          godot --headless --path . --export-release Linux build/export/MSX-StepUp-HybridHLE.x86_64
+          cp build/export/* build/package/
+          cp PLAYER_README.md build/package/README.md
+          cp LICENSE ASSET-LICENSE.md THIRD_PARTY_NOTICES.md build/package/
+          cp roms/README.cbios build/package/CBIOS-LICENSE.txt
+          cd build/package
+          zip -9r ../MSX-StepUp-HybridHLE-linux-x86_64.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: build/MSX-StepUp-HybridHLE-linux-x86_64.zip
+
+  windows:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: true
+      - name: Build native extension
+        run: |
+          cmake -S . -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DGODOTCPP_TARGET=template_release
+          cmake --build build/windows --parallel
+      - name: Export and package
+        run: |
+          godot --headless --import --path .
+          mkdir -p build/export build/package/roms
+          godot --headless --path . --export-release Windows build/export/MSX-StepUp-HybridHLE.exe
+          cp build/export/* build/package/
+          cp PLAYER_README.md build/package/README.md
+          cp LICENSE ASSET-LICENSE.md THIRD_PARTY_NOTICES.md build/package/
+          cp roms/README.cbios build/package/CBIOS-LICENSE.txt
+          7z a -tzip build/MSX-StepUp-HybridHLE-windows-x86_64.zip ./build/package/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: build/MSX-StepUp-HybridHLE-windows-x86_64.zip
+
+  macos:
+    runs-on: macos-14
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: true
+      - name: Build universal native extension
+        run: |
+          cmake -S . -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release -DGODOTCPP_TARGET=template_release '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64'
+          cmake --build build/macos --parallel
+      - name: Export and package
+        run: |
+          godot --headless --import --path .
+          mkdir -p build/export build/package/roms
+          godot --headless --path . --export-release macOS build/export/game.zip
+          unzip -q build/export/game.zip -d build/package
+          cp PLAYER_README.md build/package/README.md
+          cp LICENSE ASSET-LICENSE.md THIRD_PARTY_NOTICES.md build/package/
+          cp roms/README.cbios build/package/CBIOS-LICENSE.txt
+          cd build/package
+          zip -9ry ../MSX-StepUp-HybridHLE-macOS-universal.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: build/MSX-StepUp-HybridHLE-macOS-universal.zip
+
+  android:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: true
+      - name: Install the Android SDK components used by Godot 4.6
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "build-tools;35.0.1" "platforms;android-35" "ndk;28.1.13356709"
+      - name: Build ARM64 native extension
+        run: |
+          cmake -S . -B build/android -G Ninja -DCMAKE_BUILD_TYPE=Release -DGODOTCPP_TARGET=template_release -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/28.1.13356709/build/cmake/android.toolchain.cmake" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24
+          cmake --build build/android --parallel
+      - name: Configure Android export and signing
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          godot --headless --editor --path . --script tools/configure_android.gd
+          mkdir -p build/export
+          if [[ -n "$RELEASE_KEYSTORE_BASE64" ]]; then
+            printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > build/release.keystore
+          else
+            keytool -genkeypair -v -keystore build/release.keystore -storepass android -alias stepup -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Development Build,O=MSX StepUp HybridHLE,C=GB"
+          fi
+      - name: Export APK
+        env:
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ github.workspace }}/build/release.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ secrets.ANDROID_KEYSTORE_USER || 'stepup' }}
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || 'android' }}
+        run: |
+          godot --headless --import --path .
+          godot --headless --path . --export-release Android build/export/MSX-StepUp-HybridHLE-android-arm64.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-arm64
+          path: build/export/MSX-StepUp-HybridHLE-android-arm64.apk
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos, android]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

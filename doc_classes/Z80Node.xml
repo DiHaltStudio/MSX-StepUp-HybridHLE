@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="Z80Node" inherits="Node" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Complete, cycle-accurate Z80 CPU emulator with I/O callbacks and step debugger support.
+	</brief_description>
+	<description>
+		[Z80Node] is a GDExtension that wraps the [url=https://github.com/floooh/chips]floooh/chips[/url] Z80 emulator and exposes it to GDScript. It maintains 64 KB of internal RAM, 256 I/O input/output ports, and an accurate tick-based execution engine.
+		[br][br]
+		[b]Typical usage (50 Hz MSX frame loop):[/b]
+		[codeblock]
+		func _physics_process(_delta):
+		    vdp_status |= 0x80          # assert vsync flag
+		    cpu.trigger_int(0xFF)       # raise /INT pin
+		    cpu.execute_cycles(71591)   # ~3.58 MHz / 50 Hz
+		[/codeblock]
+		[b]Step debugger:[/b]
+		[codeblock]
+		# execute exactly one instruction
+		cpu.execute_instruction()
+		var pc = cpu.get_instr_pc()
+
+		# step over a CALL or LDIR (run until next instruction address)
+		var info = Z80Dasm.disasm(func(a): return cpu.mem_read(a), pc)
+		cpu.execute_until_pc(pc + info["length"], 100000)
+		[/codeblock]
+		[b]Interrupt lifecycle (MSX VDP example):[/b]
+		[codeblock]
+		# GDScript port-in callback
+		func _on_port_in(port: int) -> int:
+		    if port == 0x99:            # VDP status read
+		        cpu.clear_int()        # VDP releases /INT after status read
+		        return 0x80            # bit 7 = vsync flag active
+		    return 0xFF
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<!-- ── Memory ───────────────────────────────────────────────────────── -->
+		<method name="load_binary">
+			<return type="void" />
+			<param index="0" name="data" type="PackedByteArray" />
+			<param index="1" name="base_addr" type="int" />
+			<description>
+				Copies [param data] into internal RAM starting at [param base_addr]. Clamps to 64 KB boundary. Ideal for loading ROM images.
+			</description>
+		</method>
+		<method name="get_memory" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+				Returns a full 65536-byte copy of current RAM. Useful for snapshots or debugging.
+			</description>
+		</method>
+		<method name="set_memory">
+			<return type="void" />
+			<param index="0" name="data" type="PackedByteArray" />
+			<description>
+				Replaces the entire 64 KB RAM with [param data]. [param data] must be exactly 65536 bytes.
+			</description>
+		</method>
+		<method name="mem_read" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="addr" type="int" />
+			<description>
+				Reads one byte (0–255) from RAM at [param addr]. Address wraps at 0xFFFF.
+			</description>
+		</method>
+		<method name="mem_write">
+			<return type="void" />
+			<param index="0" name="addr" type="int" />
+			<param index="1" name="val" type="int" />
+			<description>
+				Writes one byte [param val] to RAM at [param addr].
+			</description>
+		</method>
+		<!-- ── Execution ─────────────────────────────────────────────────────── -->
+		<method name="execute_cycles">
+			<return type="int" />
+			<param index="0" name="n" type="int" />
+			<description>
+				Runs the CPU for [param n] T-states. Because the Z80 never breaks mid-instruction, the actual number of cycles executed may slightly exceed [param n]. Returns the actual number of T-states executed.
+				[br][br]For a 3.58 MHz MSX running at 50 Hz, pass [code]71591[/code].
+			</description>
+		</method>
+		<method name="execute_cycles_with_breakpoints">
+			<return type="int" />
+			<param index="0" name="n" type="int" />
+			<param index="1" name="breakpoints" type="PackedInt32Array" />
+			<description>
+				Runs the CPU for up to [param n] T-states. Monitors M1/RD cycles. If [method get_instr_pc] matches any address in [param breakpoints], execution stops immediately and the method returns [code]-1[/code]. Otherwise, it returns the total number of T-states executed.
+			</description>
+		</method>
+		<method name="execute_instruction">
+			<return type="int" />
+			<description>
+				Executes exactly one complete Z80 instruction (all its T-states). Returns the number of T-states consumed. Use this for single-step debugging.
+				[br][br]After this call, [method get_instr_pc] returns the address of the [i]next[/i] instruction to be executed.
+			</description>
+		</method>
+		<method name="execute_until_pc">
+			<return type="int" />
+			<param index="0" name="target_pc" type="int" />
+			<param index="1" name="max_instrs" type="int" />
+			<description>
+				Executes instructions until [method get_instr_pc] equals [param target_pc] or [param max_instrs] instructions have been executed (safety limit). Returns the number of instructions executed.
+				[br][br]Use this to implement [b]step-over[/b]: set [param target_pc] to [code]current_pc + instruction_length[/code] so that CALL, LDIR, DJNZ etc. are executed as a single step from the debugger's perspective.
+			</description>
+		</method>
+		<method name="reset">
+			<return type="void" />
+			<description>
+				Performs a hardware reset of the CPU (clears PC, SP, interrupt state, and internal pins). RAM contents are preserved.
+			</description>
+		</method>
+		<!-- ── Interrupts ─────────────────────────────────────────────────────── -->
+		<method name="trigger_int">
+			<return type="void" />
+			<param index="0" name="bus_data" type="int" />
+			<description>
+				Asserts the /INT pin. The CPU will acknowledge the interrupt after the current instruction completes (if IFF1=1). [param bus_data] is placed on the data bus during the IORQ+M1 acknowledge cycle (use [code]0xFF[/code] for MSX IM1 mode).
+				[br][br]The /INT pin remains asserted until [method clear_int] is called (e.g. when the ISR reads the VDP status register).
+			</description>
+		</method>
+		<method name="trigger_nmi">
+			<return type="void" />
+			<description>
+				Asserts the /NMI pin. The CPU jumps to address [code]0x0066[/code] regardless of IFF1. The pin is automatically cleared after the NMI is acknowledged.
+			</description>
+		</method>
+		<method name="clear_int">
+			<return type="void" />
+			<description>
+				De-asserts the /INT pin. Call this from the port-in callback when the peripheral (e.g. VDP) releases the interrupt line — typically when the ISR reads the VDP status register (port [code]0x99[/code] on MSX).
+			</description>
+		</method>
+		<!-- ── Registers ─────────────────────────────────────────────────────── -->
+		<method name="get_registers" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns a [Dictionary] with the current CPU register state. Keys: [code]PC[/code], [code]SP[/code], [code]AF[/code], [code]BC[/code], [code]DE[/code], [code]HL[/code], [code]IX[/code], [code]IY[/code], [code]AF2[/code], [code]BC2[/code], [code]DE2[/code], [code]HL2[/code], [code]I[/code], [code]R[/code], [code]IFF1[/code], [code]IFF2[/code], [code]IM[/code].
+				[br][br][b]Note:[/b] [code]PC[/code] here reflects the internal [code]_cpu.pc[/code] which is already incremented past the opcode fetch. Use [method get_instr_pc] to get the real address of the current instruction.
+			</description>
+		</method>
+		<method name="set_registers">
+			<return type="void" />
+			<param index="0" name="regs" type="Dictionary" />
+			<description>
+				Sets any subset of CPU registers from [param regs]. Only keys present in the dictionary are applied; others are left unchanged. Accepts the same keys as [method get_registers].
+				[br][br]If [code]PC[/code] is present it is applied last via [code]z80_prefetch()[/code] so the pin state is updated correctly.
+				[br][br]Example — initialise to a captured MSX state:
+				[codeblock]
+				cpu.set_registers({
+				    "AF": 0x0124, "AF2": 0x3420,
+				    "BC": 0x0001, "BC2": 0x04F3,
+				    "DE": 0x4122, "DE2": 0x550C,
+				    "HL": 0x4004, "HL2": 0x4122,
+				    "IX": 0x4122, "IY":  0x0124,
+				    "SP": 0xF08E,
+				    "I": 0x00,   "R": 0x04,
+				    "IFF1": 0,   "IFF2": 0,
+				    "IM": 1,     "PC": 0x4122,
+				})
+				[/codeblock]
+			</description>
+		</method>
+		<method name="set_pc">
+			<return type="void" />
+			<param index="0" name="addr" type="int" />
+			<description>
+				Sets the Program Counter to [param addr] and updates the internal pin state via [code]z80_prefetch()[/code]. Equivalent to [code]set_registers({"PC": addr})[/code].
+			</description>
+		</method>
+		<method name="get_instr_pc" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the address of the instruction currently on the bus (M1/T2 address bus). This is the correct PC value to display in a debugger and to pass to a disassembler, because [code]get_registers()["PC"][/code] is already +1 past the opcode fetch.
+			</description>
+		</method>
+		<!-- ── I/O Ports ─────────────────────────────────────────────────────── -->
+		<method name="set_port_in_callback">
+			<return type="void" />
+			<param index="0" name="callback" type="Callable" />
+			<description>
+				Registers a [Callable] that is invoked on every [code]IN[/code] instruction. Signature: [code]func(port: int) -> int[/code]. The returned value (0–255) is placed on the data bus.
+				[br][br]If no callback is set, the static [method set_port_in] array is used instead.
+			</description>
+		</method>
+		<method name="set_port_out_callback">
+			<return type="void" />
+			<param index="0" name="callback" type="Callable" />
+			<description>
+				Registers a [Callable] that is invoked on every [code]OUT[/code] instruction. Signature: [code]func(port: int, value: int) -> void[/code].
+			</description>
+		</method>
+		<method name="set_mem_write_callback">
+			<return type="void" />
+			<param index="0" name="callback" type="Callable" />
+			<description>
+				Registers a [Callable] that is invoked after every CPU memory write ([code]MREQ + WR[/code]). Signature: [code]func(addr: int, value: int) -> void[/code].
+				[br][br]The write to internal RAM has already been applied when the callback fires. Use this to implement memory mappers that trap writes to specific address ranges (e.g. MegaROM bankswitching, RAM mirroring, or memory-mapped peripherals).
+				[br][br][b]Konami4 (K4) MegaROM example:[/b]
+				[codeblock]
+				func _ready():
+				    cpu.set_mem_write_callback(Callable(self, "_on_mem_write"))
+
+				func _on_mem_write(addr: int, val: int) -> void:
+				    if addr >= 0x6000 and addr &lt;= 0x7FFF:
+				        _k4_map_segment(0x6000, val)  # switch page 1
+				    elif addr >= 0x8000 and addr &lt;= 0x9FFF:
+				        _k4_map_segment(0x8000, val)  # switch page 2
+				    elif addr >= 0xA000 and addr &lt;= 0xBFFF:
+				        _k4_map_segment(0xA000, val)  # switch page 3
+				[/codeblock]
+				[b]Note:[/b] This callback is called on every memory write and must execute quickly to avoid stalling the emulation loop.
+			</description>
+		</method>
+		<method name="set_port_in">
+			<return type="void" />
+			<param index="0" name="port" type="int" />
+			<param index="1" name="value" type="int" />
+			<description>
+				Sets the static input value for [param port]. Used when no port-in callback is registered.
+			</description>
+		</method>
+		<method name="get_port_out" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="port" type="int" />
+			<description>
+				Returns the last value written by the CPU to [param port] via [code]OUT[/code].
+			</description>
+		</method>
+		<method name="get_ports_in" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+				Returns all 256 input port values as a [PackedByteArray].
+			</description>
+		</method>
+		<method name="get_ports_out" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>
+				Returns all 256 output port values as a [PackedByteArray].
+			</description>
+		</method>
+	</methods>
+</class>

@@ -1,0 +1,13 @@
+[configuration]
+entry_symbol = "z80_plugin_init"
+compatibility_minimum = "4.6"
+
+[libraries]
+linux.debug.x86_64    = "res://bin/linux/x86_64/libz80_plugin.so"
+linux.release.x86_64  = "res://bin/linux/x86_64/libz80_plugin.so"
+windows.debug.x86_64  = "res://bin/windows/x86_64/z80_plugin.dll"
+windows.release.x86_64 = "res://bin/windows/x86_64/z80_plugin.dll"
+macos.debug           = "res://bin/macos/universal/libz80_plugin.dylib"
+macos.release         = "res://bin/macos/universal/libz80_plugin.dylib"
+android.debug.arm64   = "res://bin/android/arm64/libz80_plugin.so"
+android.release.arm64 = "res://bin/android/arm64/libz80_plugin.so"

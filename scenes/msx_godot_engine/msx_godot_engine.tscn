@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://cwo520rpskw7g"]
+
+[ext_resource type="TileSet" uid="uid://b5cu6if42orri" path="res://tilesets/tileset_stepup.tres" id="1_68cys"]
+[ext_resource type="Script" uid="uid://cknh7b3chj2tc" path="res://scenes/msx_godot_engine/msx_godot_engine.gd" id="1_script"]
+
+[node name="MSXGodotEngine" type="Node2D" unique_id=64093300]
+script = ExtResource("1_script")
+
+[node name="Z80Node" type="Z80Node" parent="." unique_id=832159377]
+
+[node name="TileMapLayer" type="TileMapLayer" parent="." unique_id=356704306]
+tile_set = ExtResource("1_68cys")
