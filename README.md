@@ -17,8 +17,8 @@ with editable LaTeX sources in [`docs/manual`](docs/manual/).
 
 ## Download and play
 
-Prebuilt applications are release assets, not files committed to the source
-repository. Use these links after the first tagged GitHub release is published:
+Prebuilt applications are published as release assets rather than committed to
+the source repository. Download the latest release for your platform:
 
 | Platform | Download |
 | --- | --- |
@@ -27,9 +27,8 @@ repository. Use these links after the first tagged GitHub release is published:
 | macOS Universal | [MSX-StepUp-HybridHLE-macOS-universal.zip](../../releases/latest/download/MSX-StepUp-HybridHLE-macOS-universal.zip) |
 | Android ARM64 | [MSX-StepUp-HybridHLE-android-arm64.apk](../../releases/latest/download/MSX-StepUp-HybridHLE-android-arm64.apk) |
 
-If a link returns 404, no tagged release containing that asset has been
-published yet. Maintainers create all four downloads by pushing a tag whose
-name starts with `v`; the release workflow is described below.
+Maintainers create all four downloads by pushing a tag whose name starts with
+`v`; the release workflow is described below.
 
 Start the game and select your ROM when prompted. If it was supplied in a ZIP
 archive, extract the `.rom` file first. The game checks the file and stores a
